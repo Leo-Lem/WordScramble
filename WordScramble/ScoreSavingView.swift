@@ -23,10 +23,10 @@ struct NewGameView: View {
                 Spacer()
                 
                 if name.isEmpty {
-                    Button("Don't Save") { newGame("", false, newRootWord) }
+                    Button("New Game Without Saving") { newGame("", false, newRootWord) }
                         .buttonStyle(.bordered)
                 } else {
-                    Button("Save") { newGame(name, true, newRootWord) }
+                    Button("New Game") { newGame(name, true, newRootWord) }
                         .buttonStyle(.bordered)
                 }
             }

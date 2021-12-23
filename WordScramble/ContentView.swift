@@ -22,9 +22,6 @@ struct ContentView: View {
                 Text(viewModel.rootWord)
                     .bold()
                     .font(.largeTitle)
-                    .onTapGesture {
-                        
-                    }
                 
                 TextField("Enter your word", text: $viewModel.newWord, onCommit: addWord)
                     .textFieldStyle(.roundedBorder)

@@ -10,18 +10,20 @@ import MyOthers
 
 extension ContentView {
     @MainActor class ViewModel: ObservableObject {
-        @Published private(set) var rootWord = "silkworm"
-        @Published private(set) var usedWords = [String]()
-        @Published var newWord = ""
-        private var answer: String {
-            newWord
-                .lowercased()
-                .trimmingCharacters(in: .whitespacesAndNewlines)
+        private var startWords: [String] {
+            didSet { UserDefaults.standard.set(startWords, forKey: "startWords") }
         }
+        @Published private(set) var rootWord = "silkworm" {
+            didSet { UserDefaults.standard.set(rootWord, forKey: "rootWord") }
+        }
+        @Published private(set) var usedWords = [String]() {
+            didSet { UserDefaults.standard.set(usedWords, forKey: "usedWords") }
+        }
+        @Published var newWord = ""
         
         //error display if the word is not valid
         @Published var error = ErrorDisplay()
-        class ErrorDisplay {
+        struct ErrorDisplay {
             var title = "Oops!", message = "Something went wrong...", show = false
         }
         
@@ -29,12 +31,12 @@ extension ContentView {
         @Published var showScoreSaveDialog = false
         @Published var showRanking = false
         
-        @Published private(set) var score = 0
+        @Published private(set) var score = 0 {
+            didSet { UserDefaults.standard.set(score, forKey: "score") }
+        }
         
         @Published var ranking = [Rank]() {
-            didSet {
-                UserDefaults.standard.setObject(ranking, forKey: "ranking")
-            }
+            didSet { UserDefaults.standard.setObject(ranking, forKey: "ranking") }
         }
         
         func newGame(name: String = "", saveScore: Bool = false, newRootWord: String = "") {
@@ -60,18 +62,22 @@ extension ContentView {
         }
         
         //loading the start words during initialization
-        private let startWords: [String]
         init() {
-            do {
-                guard let startWordsURL = Bundle.main.url(forResource: "start", withExtension: "txt") else { throw URLError(.badURL) }
-                let startWordsString = try String(contentsOf: startWordsURL)
-                startWords = startWordsString.components(separatedBy: "\n")
-            } catch {
-                print("Error: Couldn't retrieve start words from text file")
-                startWords = []
+            if let fetchedStartWords = UserDefaults.standard.object(forKey: "startWords") as? [String] {
+                self.startWords = fetchedStartWords
+            } else {
+                do {
+                    guard let startWordsURL = Bundle.main.url(forResource: "start", withExtension: "txt") else { throw URLError(.badURL) }
+                    let startWordsString = try String(contentsOf: startWordsURL)
+                    startWords = startWordsString.components(separatedBy: "\n")
+                } catch {
+                    print("Error: Couldn't retrieve start words from text file")
+                    startWords = []
+                }
             }
-            newGame()
             
+            self.rootWord = UserDefaults.standard.object(forKey: "rootWord") as? String ?? rootWord
+            self.usedWords = UserDefaults.standard.object(forKey: "usedWords") as? [String] ?? usedWords
             self.ranking = UserDefaults.standard.getObject(forKey: "ranking", castTo: [Rank].self) ?? [Rank]()
         }
     }
@@ -80,76 +86,57 @@ extension ContentView {
 //MARK: Validating and adding the typed word
 extension ContentView.ViewModel {
     func addWord() {
-        do {
-            try validateWord()
-            usedWords.insert(answer, at: 0)
-            score += answer.count
-        } catch WordError.isRootword(let title, let message) {
-            self.error.title = title
-            self.error.message = message
-            self.error.show = true
-        } catch WordError.notLongEnough(let title, let message){
-            self.error.title = title
-            self.error.message = message
-            self.error.show = true
-        } catch WordError.notOriginal(let title, let message) {
-            self.error.title = title
-            self.error.message = message
-            self.error.show = true
-        } catch WordError.notPossible(let title, let message) {
-            self.error.title = title
-            self.error.message = message
-            self.error.show = true
-        } catch WordError.notReal(let title, let message) {
-            self.error.title = title
-            self.error.message = message
-            self.error.show = true
-        } catch {
-            self.error.show = true
-        }
-    }
-    
-    private enum WordError: Error {
-        case isRootword(title: String = "Word = root word!", message: String = "Obviously you can't just use the original word"),
-             notLongEnough(title: String = "Word too short!", message: String = "Only words with more than 2 letters allowed"),
-             notOriginal(title: String  = "Word used already!", message: String = "Be more original..."),
-             notPossible(title: String = "Word not recognized!", message: String = "You can't just make them up, you know!"),
-             notReal(title: String = "Word not possible!", message: String = "That is no english word!")
-    }
-    
-    private func validateWord() throws {
-        guard answer != rootWord else { throw WordError.isRootword() }
-        guard answer.count > 2 else { throw WordError.notLongEnough() }
-        guard isOriginal else { throw WordError.notOriginal() }
-        guard isPossible else { throw WordError.notPossible() }
-        guard isReal else { throw WordError.notReal() }
-    }
-    
-    private var isOriginal: Bool {
-        !usedWords.contains(answer)
-    }
-    
-    private var isPossible: Bool {
-        var isPossible = true
-        var chars = Array(rootWord)
+        let word = newWord.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
         
-        answer.forEach { char in
+        if let errorDisplay = validateWord(word) {
+            self.error = errorDisplay
+        } else {
+            usedWords.insert(word, at: 0)
+            score += word.count
+        }
+        self.newWord = ""
+    }
+    
+    private func validateWord(_ word: String) -> ErrorDisplay? {
+        guard word != rootWord else {
+            return ErrorDisplay(title: "Word = root word!", message: "Obviously you can't just use the original word", show: true)
+        }
+        guard word.count > 2 else {
+            return ErrorDisplay(title: "Word too short!", message: "Only words with more than 2 letters allowed", show: true)
+        }
+        guard !usedWords.contains(word) else {
+            return ErrorDisplay(title: "Word used already!", message: "Be more original...", show: true)
+        }
+        print(checkIfPossible(word: word))
+        guard checkIfPossible(word: word) else {
+            return ErrorDisplay(title: "Word not recognized!", message: "You can't just make them up, you know!", show: true)
+        }
+        guard checkIfReal(word: word) else {
+            return ErrorDisplay(title: "Word not possible!", message: "That is no english word!", show: true)
+        }
+        return nil
+    }
+    
+    private func checkIfPossible(word: String) -> Bool {
+        var chars = rootWord
+        
+        for char in word {
             if chars.contains(char) {
-                if let index = chars.firstIndex(where: { $0 == char }) {
+                if let index = chars.firstIndex(of: char) {
                     chars.remove(at: index)
-                } else {
-                    isPossible = false
                 }
+            } else {
+                return false
             }
         }
         
-        return isPossible
+        return true
     }
     
-    private var isReal: Bool {
+    private func checkIfReal(word: String) -> Bool {
         let checker = UITextChecker()
-        let range = NSRange(location: 0, length: answer.utf16.count)
-        let misspelledRange = checker.rangeOfMisspelledWord(in: answer, range: range, startingAt: 0, wrap: false, language: "en")
+        let range = NSRange(location: 0, length: word.utf16.count)
+        let misspelledRange = checker.rangeOfMisspelledWord(in: word, range: range, startingAt: 0, wrap: false, language: "en")
         
         return misspelledRange.location == NSNotFound
     }
