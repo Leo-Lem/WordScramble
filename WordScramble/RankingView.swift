@@ -9,22 +9,31 @@ import SwiftUI
 
 struct RankingView: View {
     typealias Rank = ContentView.ViewModel.Rank
-    var ranking = [Rank]()
+    @Binding var ranking: [Rank]
+    
+    func delete(at offsets: IndexSet) {
+        ranking.remove(atOffsets: offsets)
+    }
     
     var body: some View {
         VStack {
             Text("Highscores")
                 .bold()
                 .font(.largeTitle)
-            Form {
+            
+            List {
                 ForEach(ranking.sorted().reversed(), id: \.self) { rank in
                     HStack {
                         VStack(alignment: .leading) {
                             Text("\(rank.name)")
                                 .font(.headline)
+                            if rank.time != nil {
+                                Text("took \(rank.time!) seconds")
+                                    .font(.subheadline)
+                            }
                             Text("with '\(rank.word)'")
                                 .font(.subheadline)
-                            Text("at \(rank.time.formatted(date: .omitted, time: .shortened)) on \(rank.time.formatted(date: .abbreviated, time: .omitted))")
+                            Text("at \(rank.timestamp.formatted(date: .omitted, time: .shortened)) on \(rank.timestamp.formatted(date: .abbreviated, time: .omitted))")
                                 .font(.footnote)
                         }
                         Spacer()
@@ -32,15 +41,19 @@ struct RankingView: View {
                             .font(.title)
                     }
                 }
+                .onDelete(perform: delete)
             }
+        }
+        .toolbar {
+            EditButton()
         }
     }
 }
 
 struct RankingView_Previews: PreviewProvider {
     static var previews: some View {
-        RankingView(ranking: [RankingView.Rank(name: "Leo", word: "mon", score: 10, time: Date()),
-                              RankingView.Rank(name: "Vale", word: "cacadoo", score: 15, time: Date()-1000),
-                              RankingView.Rank(name: "Leo", word: "heyyy", score: 6, time: Date()-100000)])
+        RankingView(ranking: .constant([
+            RankingView.Rank(name: "Leo", word: "monday", score: 10, time: 100, usedWords: ["day", "may", "moan"], timestamp: Date())
+        ]))
     }
 }
